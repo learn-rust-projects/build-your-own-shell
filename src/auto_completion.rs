@@ -54,7 +54,7 @@ impl Completer for MyCompleter {
                     })
                     .collect()
             })
-            .unwrap_or_else(|| Vec::new());
+            .unwrap_or_default();
         Ok((0, prefix_keys))
     }
     fn update(&self, line: &mut LineBuffer, start: usize, elected: &str, cl: &mut Changeset) {

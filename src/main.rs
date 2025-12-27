@@ -8,13 +8,16 @@ use std::{
     vec,
 };
 mod auto_completion;
+mod history;
 use anyhow::Context;
 use auto_completion::MyCompleter;
+use history::handle_history_options;
 use is_executable::IsExecutable;
 use rustyline::{
     Editor,
     config::{CompletionType, Config, Configurer},
     error::ReadlineError,
+    history::{FileHistory, History},
 };
 use strum::{AsRefStr, Display, EnumIter, EnumString};
 pub static GLOBAL_VEC: LazyLock<Vec<PathBuf>> = LazyLock::new(|| {
@@ -68,18 +71,21 @@ fn create_or_truncate_file(path: &str, append: bool) -> anyhow::Result<()> {
 
 fn main() -> anyhow::Result<()> {
     let config = Config::builder()
-    .completion_type(CompletionType::List) // 多候选时列出
-    .bell_style(rustyline::config::BellStyle::Audible)               // 歧义时响铃
-    .build();
+        .history_ignore_dups(false)?
+        .completion_type(CompletionType::List) // 多候选时列出
+        .bell_style(rustyline::config::BellStyle::Audible)               // 歧义时响铃
+        .build();
 
     let completer = MyCompleter;
     let mut rl = Editor::with_config(config)?;
     rl.set_completion_type(rustyline::CompletionType::List);
     rl.set_helper(Some(completer));
+    history::read_history_file(&mut rl)?;
     loop {
         match rl.readline("$ ") {
             Ok(line) => {
-                parse_and_handle_line(&line)?;
+                let _ = rl.add_history_entry(line.as_str());
+                parse_and_handle_line(&line, &mut rl)?;
             }
             Err(ReadlineError::Interrupted) => {
                 println!("^C");
@@ -97,7 +103,10 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn parse_and_handle_line(line: &str) -> anyhow::Result<()> {
+fn parse_and_handle_line(
+    line: &str,
+    rl: &mut Editor<MyCompleter, FileHistory>,
+) -> anyhow::Result<()> {
     let line_trim = line.trim();
     let tokens = split_quotes(line_trim);
     let iter = tokens.into_iter();
@@ -117,6 +126,7 @@ fn parse_and_handle_line(line: &str) -> anyhow::Result<()> {
             i == len - 1,
             handle_redirect_file(token.append_out, token_redirect_out)?,
             handle_redirect_file(token.append_err, token_redirect_err)?,
+            rl,
         );
 
         if !last_result.stderr.is_empty() {
@@ -140,13 +150,11 @@ fn parse_and_handle_line(line: &str) -> anyhow::Result<()> {
             } else if !last_result.stdout.is_empty() {
                 std_out.write_all(&last_result.stdout)?;
             }
-        } else {
-            if !last_result.stdout.is_empty() {
-                handle_redirect_file(token.append_out, token_redirect_out)?
-                    .as_mut()
-                    .unwrap()
-                    .write_all(&last_result.stdout)?;
-            }
+        } else if !last_result.stdout.is_empty() {
+            handle_redirect_file(token.append_out, token_redirect_out)?
+                .as_mut()
+                .unwrap()
+                .write_all(&last_result.stdout)?;
         }
     }
     Ok(())
@@ -154,17 +162,19 @@ fn parse_and_handle_line(line: &str) -> anyhow::Result<()> {
 
 fn handle_redirect_file(append: bool, redirect_file: Option<&str>) -> anyhow::Result<Option<File>> {
     let f = if let Some(redirect_file) = redirect_file {
-        Some(OpenOptions::new()
-        .append(append)
-        .write(true)
-        .open(redirect_file)?)
+        Some(
+            OpenOptions::new()
+                .append(append)
+                .write(true)
+                .open(redirect_file)?,
+        )
     } else {
         None
     };
     Ok(f)
 }
 /// 表示一个命令执行结果
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct CommandResult {
     stdout: Vec<u8>, // 标准输出
     #[allow(dead_code)]
@@ -173,16 +183,7 @@ struct CommandResult {
     exit_code: i32, // 退出码，0表示成功
     stdout_stdio: Option<ChildStdout>,
 }
-impl Default for CommandResult {
-    fn default() -> Self {
-        Self {
-            stdout: vec![],
-            stderr: vec![],
-            exit_code: 0,
-            stdout_stdio: None,
-        }
-    }
-}
+
 impl CommandResult {
     fn new_with_stdout(stdout: String) -> Self {
         Self {
@@ -206,6 +207,7 @@ pub enum BuildinCommand {
     Cd,
     Echo,
     Type,
+    History,
 }
 
 fn handle(
@@ -214,6 +216,7 @@ fn handle(
     last: bool,
     redirect_out: Option<File>,
     redirect_err: Option<File>,
+    rl: &mut Editor<MyCompleter, FileHistory>,
 ) -> CommandResult {
     let command = params.next().context("command is empty");
     let command = match command {
@@ -224,7 +227,14 @@ fn handle(
     };
 
     match command.parse::<BuildinCommand>() {
-        Ok(BuildinCommand::Exit) => std::process::exit(0),
+        Ok(BuildinCommand::Exit) => match history::write_history_file(rl) {
+            Ok(_) => {
+                std::process::exit(0);
+            }
+            Err(_) => {
+                std::process::exit(0);
+            }
+        },
         Ok(BuildinCommand::Echo) => {
             CommandResult::new_with_stdout(format!("{}\n", params.collect::<Vec<_>>().join(" ")))
         }
@@ -278,6 +288,39 @@ fn handle(
                 }
             }
         }
+        Ok(BuildinCommand::History) => match params.next() {
+            Some(dir) => {
+                if dir == "-r" || dir == "-w" || dir == "-a" {
+                    let file: Option<String> = params.next();
+                    return match handle_history_options(&dir, file, rl) {
+                        Ok(_) => CommandResult::default(),
+                        Err(e) => CommandResult::new_with_stderr(format!("{}\n", e)),
+                    };
+                }
+
+                let num = dir
+                    .parse::<usize>()
+                    .context("history number is not a number");
+                let history = rl.history();
+                let len = history.len();
+                match num {
+                    Ok(num) => {
+                        if num > len {
+                            CommandResult::new_with_stdout(print_iter(history).collect())
+                        } else {
+                            CommandResult::new_with_stdout(
+                                print_iter(history).skip(len - num).collect(),
+                            )
+                        }
+                    }
+                    Err(_) => CommandResult::new_with_stderr(format!(
+                        "history: {}: event not found\n",
+                        dir
+                    )),
+                }
+            }
+            None => CommandResult::new_with_stdout(print_iter(rl.history()).collect()),
+        },
         _ => match find_executable_file_in_paths(&command, &GLOBAL_VEC) {
             Some(file_path) => {
                 let file_name = file_path.file_name().context("file name is empty");
@@ -366,6 +409,12 @@ fn find_executable_file_in_path(path: &Path) -> Option<PathBuf> {
     None
 }
 
+pub fn print_iter(history: &FileHistory) -> impl Iterator<Item = String> {
+    history
+        .iter()
+        .enumerate()
+        .map(|(i, s)| format!("    {}  {s}\n", i + 1))
+}
 fn find_executable_file_in_paths(executable_file: &str, paths: &Vec<PathBuf>) -> Option<PathBuf> {
     for path in paths {
         if (path.exists() || path.is_dir())
