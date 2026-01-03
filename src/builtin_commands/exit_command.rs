@@ -5,10 +5,10 @@ pub struct ExitCommand;
 impl Builtin for ExitCommand {
     fn execute(
         &self,
-        _params: Box<dyn Iterator<Item = String>>,
-        rl: &mut Editor<MyCompleter, FileHistory>,
-    ) -> CommandResult {
-        match crate::history::write_history_file(rl) {
+        _params: Vec<String>,
+        _context: &mut ExecutionContext,
+    ) -> BuiltinCommandResult {
+        match crate::history::write_history_file(_context.rl) {
             Ok(_) => {
                 std::process::exit(0);
             }

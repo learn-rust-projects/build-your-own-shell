@@ -1,11 +1,8 @@
 pub use anyhow::Context;
-pub use rustyline::{
-    Editor,
-    history::{FileHistory, History},
-};
+pub use rustyline::history::History;
 
 pub use crate::{
-    CommandResult,
-    auto_completion::MyCompleter,
+    BuiltinCommandResult,
     builtin_commands::{Builtin, BuiltinCommand},
+    parse::ExecutionContext,
 };

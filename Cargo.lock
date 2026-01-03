@@ -48,6 +48,8 @@ dependencies = [
  "anyhow",
  "bytes",
  "is_executable",
+ "libc",
+ "nix",
  "os_pipe",
  "radix_trie 0.3.0",
  "rustyline",

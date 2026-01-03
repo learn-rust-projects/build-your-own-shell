@@ -5,9 +5,9 @@ pub struct EchoCommand;
 impl Builtin for EchoCommand {
     fn execute(
         &self,
-        params: Box<dyn Iterator<Item = String>>,
-        _rl: &mut Editor<MyCompleter, FileHistory>,
-    ) -> CommandResult {
-        CommandResult::new_with_stdout(format!("{}\n", params.collect::<Vec<_>>().join(" ")))
+        params: Vec<String>,
+        _context: &mut ExecutionContext,
+    ) -> BuiltinCommandResult {
+        BuiltinCommandResult::new_with_stdout(format!("{}\n", params.join(" ")))
     }
 }

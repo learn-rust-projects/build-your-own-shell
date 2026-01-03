@@ -5,10 +5,10 @@ pub struct PwdCommand;
 impl Builtin for PwdCommand {
     fn execute(
         &self,
-        _params: Box<dyn Iterator<Item = String>>,
-        _rl: &mut Editor<MyCompleter, FileHistory>,
-    ) -> CommandResult {
-        CommandResult::new_with_stdout(
+        _params: Vec<String>,
+        _context: &mut ExecutionContext,
+    ) -> BuiltinCommandResult {
+        BuiltinCommandResult::new_with_stdout(
             std::env::current_dir()
                 .context("pwd failed\n")
                 .map(|dir| format!("{}\n", dir.display()))

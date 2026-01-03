@@ -9,7 +9,7 @@ pub enum RawToken {
 
 /// 重定向操作符
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum RedirectOp {
+pub enum RedirectOp {
     Out,       // >
     OutAppend, // >>
     In,        // <
@@ -29,7 +29,7 @@ enum LexerState {
 }
 
 /// 更符合Linux真实shell风格的词法分析器
-pub fn tokenize_line(line: &str) -> Vec<RawToken> {
+pub fn tokenize_line(line: &str) -> anyhow::Result<Vec<RawToken>> {
     // todo 修改tokens为result
     let mut tokens = Vec::new();
     let mut current_word = String::new();
@@ -123,7 +123,7 @@ pub fn tokenize_line(line: &str) -> Vec<RawToken> {
     if !current_word.is_empty() {
         tokens.push(RawToken::Word(current_word.clone()));
     }
-    tokens
+    Ok(tokens)
 }
 
 /// 解析单词，识别IO编号
@@ -170,66 +170,4 @@ fn parse_redirect_op(
         }
         _ => unreachable!(),
     }
-}
-
-
-use crate::Token;
-/// 将原始词法分析结果转换为Token结构
-pub fn raw_tokens_to_tokens(raw_tokens: Vec<RawToken>) -> Vec<Token> {
-    let mut tokens = Vec::new();
-    let mut current_token = Token::new();
-    let mut expecting_redirect_file = false;
-    let mut current_redirect_op: Option<RedirectOp> = None;
-    let mut fd = None;
-
-    for raw_token in raw_tokens {
-        match raw_token {
-            RawToken::Word(word) => {
-                if expecting_redirect_file {
-                    if let Some(op) = current_redirect_op {
-                        match op {
-                            RedirectOp::Out | RedirectOp::OutAppend => {
-                                if fd == Some(1) || fd == None {
-                                    let _ = current_token.set_redirect(word, op == RedirectOp::OutAppend);
-                                }else {
-                                    let _ = current_token.set_redirect_err(word, op == RedirectOp::OutAppend);
-                                }
-                                fd = None;
-                            }
-                            RedirectOp::In | RedirectOp::Heredoc => {
-                                // 输入重定向处理
-                            }
-                            RedirectOp::DupOut | RedirectOp::DupIn => {
-                                // 文件描述符复制处理
-                            }
-                        }
-                        expecting_redirect_file = false;
-                        current_redirect_op = None;
-                    }
-                } else {
-                    current_token.add_content(word);
-                }
-            }
-            RawToken::Pipe => {
-                if !current_token.content.is_empty() {
-                    tokens.push(current_token);
-                    current_token = Token::new();
-                }
-            }
-            RawToken::IoNumber(num) => {
-                // IO编号仅在重定向前有意义，这里暂时忽略
-                fd = Some(num);
-            }
-            RawToken::Redirect(op) => {
-                expecting_redirect_file = true;
-                current_redirect_op = Some(op);
-            }
-        }
-    }
-
-    // 添加最后一个token
-    if !current_token.content.is_empty() {
-        tokens.push(current_token);
-    }
-    tokens
 }

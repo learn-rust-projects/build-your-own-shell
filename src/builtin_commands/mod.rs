@@ -1,12 +1,4 @@
-use std::{fs::File, process::Stdio};
-
-use anyhow::Context;
-use rustyline::{
-    Editor,
-    history::{FileHistory, History},
-};
-
-use crate::{CommandResult, auto_completion::MyCompleter};
+use crate::{BuiltinCommandResult, parse::ExecutionContext};
 mod cd_command;
 mod echo_command;
 mod exit_command;
@@ -23,11 +15,7 @@ use strum::{AsRefStr, Display, EnumIter, EnumString};
 pub use type_command::TypeCommand;
 /// 内置命令接口
 pub trait Builtin {
-    fn execute(
-        &self,
-        params: Box<dyn Iterator<Item = String>>,
-        rl: &mut Editor<MyCompleter, FileHistory>,
-    ) -> CommandResult;
+    fn execute(&self, params: Vec<String>, context: &mut ExecutionContext) -> BuiltinCommandResult;
 }
 #[derive(Debug, Clone, Copy, PartialEq, Display, EnumString, AsRefStr, EnumIter)]
 #[strum(serialize_all = "lowercase")]
