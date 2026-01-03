@@ -3,16 +3,18 @@ use std::io::{self, Read, Write};
 use std::{
     fs::{File, OpenOptions},
     path::{Path, PathBuf},
-    process::{ChildStdout, Command, Stdio},
+    process::{ChildStdout, Stdio},
     sync::LazyLock,
     vec,
 };
 mod auto_completion;
+mod builtin_commands;
 mod history;
 use anyhow::Context;
 use auto_completion::MyCompleter;
-use history::handle_history_options;
 use is_executable::IsExecutable;
+mod command_handler;
+use command_handler::CommandHandlerFactory;
 use rustyline::{
     Editor,
     config::{CompletionType, Config, Configurer},
@@ -122,7 +124,7 @@ fn parse_and_handle_line(
 
         let last_result = handle(
             child_stdins.pop(),
-            token.content.into_iter(),
+            Box::new(token.content.into_iter()),
             i == len - 1,
             handle_redirect_file(token.append_out, token_redirect_out)?,
             handle_redirect_file(token.append_err, token_redirect_err)?,
@@ -175,7 +177,7 @@ fn handle_redirect_file(append: bool, redirect_file: Option<&str>) -> anyhow::Re
 }
 /// 表示一个命令执行结果
 #[derive(Debug, Default)]
-struct CommandResult {
+pub struct CommandResult {
     stdout: Vec<u8>, // 标准输出
     #[allow(dead_code)]
     stderr: Vec<u8>, // 标准错误
@@ -212,7 +214,7 @@ pub enum BuildinCommand {
 
 fn handle(
     std_in: Option<Stdio>,
-    mut params: impl Iterator<Item = String>,
+    mut params: impl Iterator<Item = String> + 'static,
     last: bool,
     redirect_out: Option<File>,
     redirect_err: Option<File>,
@@ -226,180 +228,19 @@ fn handle(
         }
     };
 
-    match command.parse::<BuildinCommand>() {
-        Ok(BuildinCommand::Exit) => match history::write_history_file(rl) {
-            Ok(_) => {
-                std::process::exit(0);
-            }
-            Err(_) => {
-                std::process::exit(0);
-            }
-        },
-        Ok(BuildinCommand::Echo) => {
-            CommandResult::new_with_stdout(format!("{}\n", params.collect::<Vec<_>>().join(" ")))
-        }
-        Ok(BuildinCommand::Type) => {
-            let command_type = params.next().context("type command is empty");
-            let command_type = match command_type {
-                Ok(command_type) => command_type,
-                Err(e) => return CommandResult::new_with_stderr(e.to_string()),
-            };
-            // TODO:使用 enum 优化
-            match command_type.parse::<BuildinCommand>() {
-                Ok(_) => {
-                    CommandResult::new_with_stdout(format!("{} is a shell builtin\n", command_type))
-                }
-                _ => match find_executable_file_in_paths(&command_type, &GLOBAL_VEC) {
-                    Some(file_path) => CommandResult::new_with_stdout(format!(
-                        "{} is {}\n",
-                        command_type,
-                        file_path.display()
-                    )),
-                    None => CommandResult::new_with_stderr(format!("{command_type}: not found\n")),
-                },
-            }
-        }
-        Ok(BuildinCommand::Pwd) => CommandResult::new_with_stdout(
-            std::env::current_dir()
-                .context("pwd failed\n")
-                .map(|dir| format!("{}\n", dir.display()))
-                .unwrap_or("".to_string()),
-        ),
-        Ok(BuildinCommand::Cd) => {
-            let dir = params.next().context("cd command is empty\n");
-            let dir = match dir {
-                Ok(dir) => dir,
-                Err(_) => {
-                    return CommandResult::new_with_stderr("cd: missing operand\n".to_string());
-                }
-            };
+    // 使用命令处理器工厂创建适当的处理器
+    let handler = CommandHandlerFactory::create_handler(&command);
 
-            if params.next().is_some() {
-                CommandResult::new_with_stderr("bash: cd: too many arguments\n".to_string())
-            } else {
-                let dir = if dir == "~" { &HOME_DIR } else { &dir };
-                match std::env::set_current_dir(dir).context("cd failed\n") {
-                    Ok(_) => CommandResult::default(),
-
-                    Err(_) => CommandResult::new_with_stderr(format!(
-                        "cd: {}: No such file or directory\n",
-                        dir
-                    )),
-                }
-            }
-        }
-        Ok(BuildinCommand::History) => match params.next() {
-            Some(dir) => {
-                if dir == "-r" || dir == "-w" || dir == "-a" {
-                    let file: Option<String> = params.next();
-                    return match handle_history_options(&dir, file, rl) {
-                        Ok(_) => CommandResult::default(),
-                        Err(e) => CommandResult::new_with_stderr(format!("{}\n", e)),
-                    };
-                }
-
-                let num = dir
-                    .parse::<usize>()
-                    .context("history number is not a number");
-                let history = rl.history();
-                let len = history.len();
-                match num {
-                    Ok(num) => {
-                        if num > len {
-                            CommandResult::new_with_stdout(print_iter(history).collect())
-                        } else {
-                            CommandResult::new_with_stdout(
-                                print_iter(history).skip(len - num).collect(),
-                            )
-                        }
-                    }
-                    Err(_) => CommandResult::new_with_stderr(format!(
-                        "history: {}: event not found\n",
-                        dir
-                    )),
-                }
-            }
-            None => CommandResult::new_with_stdout(print_iter(rl.history()).collect()),
-        },
-        _ => match find_executable_file_in_paths(&command, &GLOBAL_VEC) {
-            Some(file_path) => {
-                let file_name = file_path.file_name().context("file name is empty");
-                if file_name.is_err() {
-                    return CommandResult::new_with_stderr(format!(
-                        "{}: file name is empty\n",
-                        command
-                    ));
-                }
-                if last {
-                    Command::new(file_name.as_ref().unwrap())
-                        .args(params)
-                        .stdin(std_in.unwrap_or(Stdio::null()))
-                        .stdout(if let Some(redirect_out) = redirect_out {
-                            Stdio::from(redirect_out)
-                        } else {
-                            Stdio::inherit()
-                        })
-                        .stderr(if let Some(redirect_err) = redirect_err {
-                            Stdio::from(redirect_err)
-                        } else {
-                            Stdio::inherit()
-                        })
-                        .output()
-                        .map(|output| CommandResult {
-                            stdout: Vec::new(),
-                            stderr: Vec::new(),
-                            exit_code: output.status.code().unwrap_or(1),
-                            stdout_stdio: None,
-                        })
-                        .unwrap_or_else(|_| {
-                            CommandResult::new_with_stderr(format!(
-                                "{}: failed to execute\n",
-                                command
-                            ))
-                        })
-                } else {
-                    let is_redirect_out = redirect_out.is_some();
-                    Command::new(file_name.as_ref().unwrap())
-                        .args(params)
-                        .stdin(std_in.unwrap_or(Stdio::null()))
-                        .stdout(if let Some(redirect_out) = redirect_out {
-                            Stdio::from(redirect_out)
-                        } else {
-                            Stdio::piped()
-                        })
-                        .stderr(if let Some(redirect_err) = redirect_err {
-                            Stdio::from(redirect_err)
-                        } else {
-                            Stdio::inherit()
-                        })
-                        .spawn()
-                        .map(|mut child| {
-                            let child_stdin = child
-                                .stdout
-                                .take()
-                                .expect("Failed to open child stdin pipe");
-                            CommandResult {
-                                stdout: Vec::new(),
-                                stderr: Vec::new(),
-                                exit_code: 0,
-                                stdout_stdio: if is_redirect_out {
-                                    None
-                                } else {
-                                    Some(child_stdin)
-                                },
-                            }
-                        })
-                        .unwrap_or_else(|_| {
-                            CommandResult::new_with_stderr(format!(
-                                "{}: failed to execute\n",
-                                command
-                            ))
-                        })
-                }
-            }
-            None => CommandResult::new_with_stderr(format!("{}: command not found\n", command)),
-        },
-    }
+    // 执行命令
+    handler.execute(
+        &command,
+        std_in,
+        Box::new(params),
+        last,
+        redirect_out,
+        redirect_err,
+        rl,
+    )
 }
 
 fn find_executable_file_in_path(path: &Path) -> Option<PathBuf> {

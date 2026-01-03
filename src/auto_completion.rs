@@ -12,7 +12,7 @@ use rustyline::{
 };
 
 use crate::{BuildinCommand, GLOBAL_VEC, find_all_executable_file_in_paths};
-pub(crate) struct MyCompleter;
+pub struct MyCompleter;
 use strum::IntoEnumIterator;
 
 static GLOBAL_TRIES: LazyLock<Trie<String, ()>> = LazyLock::new(|| {
