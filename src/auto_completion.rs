@@ -11,7 +11,9 @@ use rustyline::{
     validate::{ValidationContext, ValidationResult, Validator},
 };
 
-use crate::{GLOBAL_VEC, builtin_commands::BuiltinCommand, find_all_executable_file_in_paths};
+use crate::{
+    GLOBAL_VEC, builtin_commands::BuiltinCommand, utils::find_all_executable_file_in_paths,
+};
 pub struct MyCompleter;
 use strum::IntoEnumIterator;
 

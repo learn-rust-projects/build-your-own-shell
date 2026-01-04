@@ -1,12 +1,6 @@
 /// 外部命令处理器
 use super::prelude::*;
 pub struct ExternalCommandHandler;
-use std::{
-    os::{
-        fd::AsRawFd,
-        unix::io::{FromRawFd, RawFd},
-    }
-};
 
 impl CommandHandler for ExternalCommandHandler {
     fn execute(
@@ -15,7 +9,7 @@ impl CommandHandler for ExternalCommandHandler {
         args: Vec<String>,
         context: &mut ExecutionContext,
     ) -> CommandResult {
-        let res = match crate::find_executable_file_in_paths(command, &crate::GLOBAL_VEC) {
+        match crate::utils::find_executable_file_in_paths(command, &crate::GLOBAL_VEC) {
             Some(file_path) => {
                 let file_name = file_path.file_name().context("file name is empty");
                 if file_name.is_err() {
@@ -24,20 +18,14 @@ impl CommandHandler for ExternalCommandHandler {
                 }
                 let mut cmd = std::process::Command::new(file_name.unwrap());
                 cmd.args(args);
-
                 // 应用标准输入输出重定向
                 if let Some(stdin) = context.stdin.take() {
-                    
-                        cmd.stdin(Stdio::from(stdin));
-                    
+                    cmd.stdin(Stdio::from(stdin));
                 }
                 if let Some(stdout) = context.stdout.take() {
-             
-                        cmd.stdout(Stdio::from(stdout));
-                
+                    cmd.stdout(Stdio::from(stdout));
                 }
                 if let Some(stderr) = context.stderr.take() {
-
                     cmd.stderr(Stdio::from(stderr));
                 }
                 let child = cmd.spawn().context("spawn command failed");
@@ -53,14 +41,6 @@ impl CommandHandler for ExternalCommandHandler {
                 eprintln!("{}: command not found", command);
                 CommandResult::new(1)
             }
-        };
-        res
+        }
     }
-}
-/// ⚠️ fd 必须是“新建 / dup / into_raw_fd”得到的
-use std::os::unix::io::OwnedFd;
-
-pub unsafe fn stdio_from_raw_fd(fd: OwnedFd) -> OwnedFd {
-    let new_fd = unsafe { libc::dup(fd.as_raw_fd()) };
-    unsafe { OwnedFd::from_raw_fd(new_fd) }
 }

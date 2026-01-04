@@ -81,3 +81,10 @@ pub fn write_history_file(rl: &mut Editor<MyCompleter, FileHistory>) -> Result<(
     handle_history_options("-a", Some(&path), rl)?;
     Ok(())
 }
+
+pub fn print_iter(history: &FileHistory) -> impl Iterator<Item = String> {
+    history
+        .iter()
+        .enumerate()
+        .map(|(i, s)| format!("    {}  {s}\n", i + 1))
+}

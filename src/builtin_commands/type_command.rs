@@ -20,16 +20,19 @@ impl Builtin for TypeCommand {
                 "{} is a shell builtin\n",
                 command_type
             )),
-            _ => match crate::find_executable_file_in_paths(command_type, &crate::GLOBAL_VEC) {
-                Some(file_path) => BuiltinCommandResult::new_with_stdout(format!(
-                    "{} is {}\n",
-                    command_type,
-                    file_path.display()
-                )),
-                None => {
-                    BuiltinCommandResult::new_with_stderr(format!("{command_type}: not found\n"))
+            _ => {
+                match crate::utils::find_executable_file_in_paths(command_type, &crate::GLOBAL_VEC)
+                {
+                    Some(file_path) => BuiltinCommandResult::new_with_stdout(format!(
+                        "{} is {}\n",
+                        command_type,
+                        file_path.display()
+                    )),
+                    None => BuiltinCommandResult::new_with_stderr(format!(
+                        "{command_type}: not found\n"
+                    )),
                 }
-            },
+            }
         }
     }
 }

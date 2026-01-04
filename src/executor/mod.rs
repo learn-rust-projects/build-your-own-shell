@@ -2,9 +2,9 @@ mod builtin_command_handler;
 mod external_command_handler;
 pub mod prelude;
 
-use crate::CommandResult;
 use crate::{
     builtin_commands::BuiltinCommand,
+    builtin_commands::BuiltinCommandResult,
     parse::ExecutionContext, // 添加ExecutionContext导入
 };
 /// 简化的命令处理器接口
@@ -31,25 +31,38 @@ impl CommandHandlerFactory {
     }
 }
 
-use std::os::{
-    fd::AsRawFd,
-    unix::io::{IntoRawFd, OwnedFd},
-};
+/// 表示一个命令执行结果
+#[derive(Debug)]
+pub struct CommandResult {
+    #[allow(dead_code)]
+    pub exit_code: i32, // 退出码，0表示成功
+    pub child: Option<std::process::Child>,
+}
+impl Default for CommandResult {
+    fn default() -> Self {
+        Self::new(0)
+    }
+}
+impl CommandResult {
+    pub fn new(exit_code: i32) -> Self {
+        Self {
+            exit_code,
+            child: None,
+        }
+    }
+    pub fn external_with_child(child: std::process::Child) -> Self {
+        Self {
+            exit_code: 0,
+            child: Some(child),
+        }
+    }
+}
 
-use libc::write;
-pub fn write_rawfd(fd: OwnedFd, data: &[u8]) {
-    unsafe {
-        let mut written = 0;
-        while written < data.len() {
-            let n = write(
-                fd.as_raw_fd(),
-                data[written..].as_ptr() as *const _,
-                data.len() - written,
-            );
-            if n <= 0 {
-                panic!("write failed");
-            }
-            written += n as usize;
+impl From<BuiltinCommandResult> for CommandResult {
+    fn from(value: BuiltinCommandResult) -> Self {
+        Self {
+            exit_code: value.exit_code,
+            child: None,
         }
     }
 }

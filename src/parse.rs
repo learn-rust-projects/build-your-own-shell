@@ -1,12 +1,10 @@
-use std::{
-    fs::File,
-    os::unix::io::{AsRawFd, IntoRawFd},
-};
+use std::fs::File;
 
 use rustyline::{Editor, history::FileHistory};
 
 use crate::{
     auto_completion::MyCompleter,
+    executor::CommandResult,
     lexer::{RawToken, RedirectOp},
 };
 #[derive(Debug, Clone)]
@@ -130,8 +128,7 @@ fn parse_redirect_target(token: &RawToken) -> RedirectTarget {
     }
 }
 
-use std::os::unix::io::{FromRawFd, OwnedFd};
-use std::process::Stdio;
+use std::os::unix::io::FromRawFd;
 /// 命令执行上下文
 #[derive(Debug)]
 pub struct ExecutionContext<'a> {
@@ -151,19 +148,18 @@ impl<'a> ExecutionContext<'a> {
         }
     }
 }
-fn exit_code_by_child(child: Option<std::process::Child>) -> i32{
-    child.map_or(0, |mut c| {
-        c.wait().ok().and_then(|e| e.code()).unwrap_or(1) 
-    })
+fn exit_code_by_child(child: Option<std::process::Child>) -> i32 {
+    child.map_or(0, |mut c| c.wait().ok().and_then(|e| e.code()).unwrap_or(1))
 }
-pub fn excuete_single_command( command: &Command,
+pub fn excuete_single_command(
+    command: &Command,
     context: &mut ExecutionContext,
 ) -> anyhow::Result<CommandResult> {
     let mut res = execute_command(command, context)?;
     Ok(CommandResult::new(exit_code_by_child(res.child.take())))
 }
 /// 执行命令
-pub fn execute_command( 
+pub fn execute_command(
     command: &Command,
     context: &mut ExecutionContext,
 ) -> anyhow::Result<CommandResult> {
@@ -180,7 +176,7 @@ pub fn execute_command(
 
     // 使用简化的命令处理器
     let handler = crate::CommandHandlerFactory::create_handler(command_name);
-    let mut result = handler.execute(command_name, args, context);
+    let result = handler.execute(command_name, args, context);
     Ok(result)
 }
 
@@ -254,17 +250,15 @@ fn apply_redirections(command: &Command, context: &mut ExecutionContext) -> anyh
     Ok(())
 }
 
-use crate::CommandResult;
 /// 执行管道命令
 pub fn execute_pipeline(
     commands: &[Command],
-    mut context: &mut ExecutionContext,
+    context: &mut ExecutionContext,
 ) -> anyhow::Result<CommandResult> {
     if commands.is_empty() {
         return Ok(CommandResult::default());
     }
 
-    let mut last_result = CommandResult::default();
     let mut vec = vec![];
 
     for (i, command) in commands.iter().enumerate() {
@@ -276,8 +270,8 @@ pub fn execute_pipeline(
 
             let reader = unsafe { File::from_raw_fd(fds[0]) };
             let writer = unsafe { File::from_raw_fd(fds[1]) };
-            
-            context.stdout = Some(writer);  
+
+            context.stdout = Some(writer);
 
             // 执行当前命令
             let mut command_context = ExecutionContext {

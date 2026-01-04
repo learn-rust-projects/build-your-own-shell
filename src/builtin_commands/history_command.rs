@@ -24,11 +24,13 @@ impl Builtin for HistoryCommand {
                     Ok(num) => {
                         if num > len {
                             BuiltinCommandResult::new_with_stdout(
-                                crate::print_iter(history).collect(),
+                                crate::history::print_iter(history).collect(),
                             )
                         } else {
                             BuiltinCommandResult::new_with_stdout(
-                                crate::print_iter(history).skip(len - num).collect(),
+                                crate::history::print_iter(history)
+                                    .skip(len - num)
+                                    .collect(),
                             )
                         }
                     }
@@ -39,7 +41,7 @@ impl Builtin for HistoryCommand {
                 }
             }
             None => BuiltinCommandResult::new_with_stdout(
-                crate::print_iter(context.rl.history()).collect(),
+                crate::history::print_iter(context.rl.history()).collect(),
             ),
         }
     }
