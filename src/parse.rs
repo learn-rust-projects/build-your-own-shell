@@ -3,8 +3,7 @@ use std::fs::File;
 use regex::Regex;
 
 use crate::{
-    builtin_commands::{GLOBAL_COMPLETION_DECLARE, Job},
-    executor::CommandResult,
+    builtin_commands::GLOBAL_COMPLETION_DECLARE,
     lexer::{RawToken, RedirectOp},
 };
 #[derive(Debug, Clone)]
@@ -161,7 +160,6 @@ impl ExecutionContext {
         }
     }
 }
-
 
 fn expand(input: &str) -> String {
     let env = &GLOBAL_COMPLETION_DECLARE.lock().unwrap().completions;
