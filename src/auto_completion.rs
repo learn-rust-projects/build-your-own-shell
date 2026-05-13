@@ -47,7 +47,6 @@ impl Completer for MyCompleter {
         pos: usize,
         _ctx: &rustyline::Context<'_>,
     ) -> Result<(usize, Vec<Pair>), ReadlineError> {
-        let _start = 0; // 从行首开始补全
         let last_whitespace = line.rfind(char::is_whitespace);
         match last_whitespace {
             Some(idx) => {
@@ -78,7 +77,6 @@ impl Completer for MyCompleter {
         }
     }
     fn update(&self, line: &mut LineBuffer, start: usize, elected: &str, cl: &mut Changeset) {
-        let end: usize = line.pos();
         let elected = if let Some(sub_trie) = GLOBAL_TRIES.subtrie(elected)
             && sub_trie.is_leaf()
         {
@@ -86,7 +84,7 @@ impl Completer for MyCompleter {
         } else {
             Cow::Borrowed(elected)
         };
-        line.replace(start..end, &elected, cl);
+        line.replace(start..line.pos(), &elected, cl);
     }
 }
 

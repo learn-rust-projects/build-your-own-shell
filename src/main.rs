@@ -85,19 +85,16 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn parse_and_handle_line(line: &str) -> anyhow::Result<()> {
-    // 1.去掉首尾空格 检查是否为空行
-    let line_trim = trim_and_check_line(line)?;
+    // 词法分析
+    let raw_tokens = crate::lexer::tokenize_line(trim_and_check_line(line)?)?;
 
-    // 2.词法分析
-    let raw_tokens = crate::lexer::tokenize_line(line_trim)?;
+    // 语法分析
+    let command_groups = parse_command(&raw_tokens);
 
-    // 3.语法分析
-    let command_type = parse_command(&raw_tokens);
+    // 执行命令
+    execute_command_groups(command_groups)?;
 
-    // 4.执行命令
-    execute_command_groups(command_type)?;
-
-    // 5.打印作业
+    // 打印作业
     GLOBAL_JOB.lock().unwrap().print_jobs();
 
     Ok(())
