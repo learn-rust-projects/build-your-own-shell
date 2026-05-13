@@ -65,7 +65,7 @@ fn main() -> anyhow::Result<()> {
                     let mut rl = GLOBAL_EDITOR.lock().unwrap();
                     let _ = rl.add_history_entry(line.as_str());
                 }
-                let _ = parse_and_handle_line(&line);
+                excute(&line);
             }
             Err(ReadlineError::Interrupted) => {
                 println!("^C");
@@ -84,27 +84,34 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn parse_and_handle_line(line: &str) -> anyhow::Result<()> {
+fn excute(line: &str) {
+    let Some(line) = skip_empty_line(line) else {
+        return;
+    };
     // 词法分析
-    let raw_tokens = crate::lexer::tokenize_line(trim_and_check_line(line)?)?;
+    let raw_tokens = crate::lexer::tokenize(line);
 
     // 语法分析
     let command_groups = parse_command(&raw_tokens);
 
     // 执行命令
-    execute_command_groups(command_groups)?;
+    match execute_command_groups(command_groups) {
+        Ok(_) => {}
+        Err(err) => {
+            println!("Error: {:?}", err);
+        }
+    };
 
     // 打印作业
     GLOBAL_JOB.lock().unwrap().print_jobs();
-
-    Ok(())
 }
-fn trim_and_check_line(line: &str) -> anyhow::Result<&str> {
+fn skip_empty_line(line: &str) -> Option<&str> {
     let line_trim = line.trim();
     if line_trim.is_empty() {
-        return Err(anyhow::anyhow!("Empty line"));
+        None
+    } else {
+        Some(line_trim)
     }
-    Ok(line_trim)
 }
 
 // 将这个for循环抽取成函数，用于处理多个命令组的执行抽取到外面去

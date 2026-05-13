@@ -30,8 +30,7 @@ enum LexerState {
 }
 
 /// 更符合Linux真实shell风格的词法分析器
-pub fn tokenize_line(line: &str) -> anyhow::Result<Vec<RawToken>> {
-    // todo 修改tokens为result
+pub fn tokenize(line: &str) -> Vec<RawToken> {
     let mut tokens = Vec::new();
     let mut current_word = String::new();
     let mut state = LexerState::Normal;
@@ -130,7 +129,7 @@ pub fn tokenize_line(line: &str) -> anyhow::Result<Vec<RawToken>> {
     if !current_word.is_empty() {
         tokens.push(RawToken::Word(current_word.clone()));
     }
-    Ok(tokens)
+    tokens
 }
 
 /// 解析单词，识别IO编号
