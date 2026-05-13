@@ -61,16 +61,20 @@ GLOBAL_COMPLETION_DECLARE: LazyLock<Mutex<...>>  // declare 变量存储
 
 ## 模块职责矩阵
 
-| 模块                 | 职责                                     | 关键类型                                                     |
-| -------------------- | ---------------------------------------- | ------------------------------------------------------------ |
-| `main.rs`            | REPL 循环、全局状态、编排                | -                                                            |
-| `lexer.rs`           | 词法分析                                 | `RawToken`, `RedirectOp`, `LexerState`                       |
-| `parse.rs`           | 解析、执行上下文、管道、重定向、变量展开 | `Command`, `CommandGroup`, `Redirection`, `ExecutionContext` |
-| `executor/`          | 命令执行策略                             | `CommandHandler` trait, `CommandResult`                      |
-| `builtin_commands/`  | 9 个内置命令实现                         | `Builtin` trait, `BuiltinCommand` enum, `BuiltinFactory`     |
-| `auto_completion.rs` | Tab 补全                                 | `MyCompleter` (rustyline `Completer`)                        |
-| `history.rs`         | 历史管理                                 | `ATOMIC_COUNTER`                                             |
-| `utils.rs`           | PATH 查找                                | -                                                            |
+| 模块                     | 职责                                           | 关键类型                                                     |
+| ------------------------ | ---------------------------------------------- | ------------------------------------------------------------ |
+| `main.rs`                | REPL 循环、全局状态、编排                      | -                                                            |
+| `lexer.rs`               | 词法分析                                       | `RawToken`, `RedirectOp`, `LexerState`                       |
+| `parse.rs`               | 解析、执行上下文、管道、重定向、变量展开        | `Command`, `CommandGroup`, `Redirection`, `ExecutionContext` |
+| `executor/mod.rs`        | 命令执行策略、CommandHandler trait、工厂      | `CommandHandler` trait, `CommandResult`, `CommandHandlerFactory` |
+| `executor/pipe_handler.rs` | 管道执行、单命令执行                          | `execute_pipeline()`, `excuete_single_command()`             |
+| `executor/builtin_command_handler.rs` | 内置命令执行器                    | `BuiltinCommandHandler`                                      |
+| `executor/external_command_handler.rs` | 外部命令执行器                    | `ExternalCommandHandler`                                     |
+| `executor/prelude.rs`    | 执行器模块公共导入                            | `Write`, `Stdio`, `Context`, `ExecutionContext`              |
+| `builtin_commands/`      | 9 个内置命令实现                               | `Builtin` trait, `BuiltinCommand` enum, `BuiltinFactory`     |
+| `auto_completion.rs`     | Tab 补全                                       | `MyCompleter` (rustyline `Completer`)                        |
+| `history.rs`             | 历史管理                                       | `handle_history_options()`, `read_history_file()`             |
+| `utils.rs`               | PATH 查找                                      | `find_executable_file_in_paths()`, `find_all_executable_file_in_paths()` |
 
 ## 关键技术选型
 

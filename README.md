@@ -51,14 +51,21 @@
 │  DoubleQuoteEscaping  │                    │  expand() 变量展开   │
 └──────────────────────┘                     └──────────┬───────────┘
                                                         │
-              ┌─────────────────────────────────────────┘
-              ▼
-   ┌──────────────────────┐    策略模式      ┌──────────────────────┐
-   │  executor/mod.rs     │ ──────────────►  │  CommandHandler      │
-   │  CommandHandlerFactory│                  │  trait 的两个实现:    │
-   │  (内置 vs 外部判断)   │                  │  BuiltinCommandHandler│
-   └──────────────────────┘                  │  ExternalCommandHandler│
-                                             └──────────────────────┘
+┌─────────────────────────────────────────┘
+               ▼
+    ┌──────────────────────┐    策略模式      ┌──────────────────────┐
+    │  executor/mod.rs     │ ──────────────►  │  CommandHandler      │
+    │  CommandHandlerFactory│                  │  trait 的两个实现:    │
+    │  (内置 vs 外部判断)   │                  │  BuiltinCommandHandler│
+    └──────────┬───────────┘                  │  ExternalCommandHandler│
+               │                               └──────────────────────┘
+               │ 管道/单命令执行                      │
+               ▼                                   │
+    ┌──────────────────────┐                        │
+    │  executor/pipe_handler.rs                    │
+    │  execute_pipeline()  │◄─────────────────────┘
+    │  excuete_single_command()
+    └──────────────────────┘
                                                         │
                                ┌────────────────────────┤
                                ▼                        ▼
@@ -75,25 +82,28 @@
 src/
 ├── main.rs                   # 入口，REPL 循环，全局静态变量
 ├── lexer.rs                  # 词法分析器（5 状态 FSM）
-├── parse.rs                  # 解析器 + 执行上下文 + 管道执行 + 重定向 + 变量展开
+├── parse.rs                  # 解析器 + 执行上下文 + 重定向 + 变量展开
 ├── auto_completion.rs        # Tab 补全（radix_trie + rustyline）
 ├── history.rs                # 历史文件管理（读/写/追加）
 ├── utils.rs                  # PATH 可执行文件查找
 ├── builtin_commands/
 │   ├── mod.rs                # Builtin trait + BuiltinFactory
+│   ├── prelude.rs            # 公共导入
 │   ├── echo_command.rs       # echo
 │   ├── cd_command.rs         # cd
 │   ├── pwd_command.rs        # pwd
 │   ├── type_command.rs       # type
 │   ├── exit_command.rs       # exit
 │   ├── history_command.rs    # history
-│   ├── jobs_command.rs       # jobs + JobList
-│   ├── complete_command.rs   # complete
-│   └── declare_command.rs    # declare
+│   ├── jobs_command.rs       # jobs + JobList + Job
+│   ├── complete_command.rs   # complete + CompletionManager
+│   └── declare_command.rs    # declare + DeclareMap
 └── executor/
-    ├── mod.rs                # CommandHandler trait + 工厂
+    ├── mod.rs                # CommandHandler trait + 工厂 + 重定向
+    ├── pipe_handler.rs       # 管道执行 + 单命令执行
     ├── builtin_command_handler.rs  # 内置命令执行器
-    └── external_command_handler.rs # 外部命令执行器
+    ├── external_command_handler.rs   # 外部命令执行器
+    └── prelude.rs            # 执行器公共导入
 ```
 
 ## 使用方法

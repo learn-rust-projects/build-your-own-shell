@@ -71,7 +71,9 @@ pub struct ExecutionContext {
 
 ## 管道执行
 
-`execute_pipeline()` 实现了 N 个命令的管道连接：
+`execute_pipeline()` 位于 `executor/pipe_handler.rs`，实现了 N 个命令的管道连接：
+
+> **模块划分说明**：管道执行逻辑从 `parse.rs` 抽取到独立的 `pipe_handler.rs` 模块，实现关注点分离。
 
 ```text
 输入: [cmd1, cmd2, cmd3]
