@@ -131,13 +131,10 @@ pub fn parse_simple_command(tokens: &[RawToken]) -> Command {
 fn parse_redirect_target(token: &RawToken) -> RedirectTarget {
     match token {
         RawToken::Word(w) if w == "-" => RedirectTarget::Close,
-        RawToken::Word(w) => {
-            if let Ok(fd) = w.parse::<u8>() {
-                RedirectTarget::Fd(fd)
-            } else {
-                RedirectTarget::File(w.clone())
-            }
-        }
+        RawToken::Word(w) => match w.parse::<u8>() {
+            Ok(fd) => RedirectTarget::Fd(fd),
+            Err(_) => RedirectTarget::File(w.clone()),
+        },
         _ => panic!("invalid redirect target"),
     }
 }
@@ -190,11 +187,8 @@ pub fn execute_command(
         return Ok(CommandResult::default());
     }
 
-    let command_name = &command.argv[0];
-    let args = command.argv[1..].to_vec();
-
     // 使用简化的命令处理器
-    let handler = crate::CommandHandlerFactory::create_handler(command_name);
+    let handler = crate::CommandHandlerFactory::create_handler(&command.argv[0]);
 
     let job = if context.background {
         let mut arg = command.argv.clone().join(" ");
@@ -205,7 +199,8 @@ pub fn execute_command(
     };
     context.job = job;
 
-    let result = handler.execute(command_name, args.clone(), context);
+    let result = handler.execute(&command.argv[0], command.argv[1..].to_vec(), context);
+
     Ok(result)
 }
 
