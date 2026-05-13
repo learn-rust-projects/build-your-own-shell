@@ -186,10 +186,17 @@ pub fn execute_command(
     if command.argv.is_empty() {
         return Ok(CommandResult::default());
     }
-
+    // 初始化后台作业
+    init_job(context, command);
     // 使用简化的命令处理器
     let handler = crate::CommandHandlerFactory::create_handler(&command.argv[0]);
 
+    let result = handler.execute(&command.argv[0], command.argv[1..].to_vec(), context);
+
+    Ok(result)
+}
+/// 初始化后台作业
+fn init_job(context: &mut ExecutionContext, command: &Command) {
     let job = if context.background {
         let mut arg = command.argv.clone().join(" ");
         arg.push(' ');
@@ -198,12 +205,7 @@ pub fn execute_command(
         None
     };
     context.job = job;
-
-    let result = handler.execute(&command.argv[0], command.argv[1..].to_vec(), context);
-
-    Ok(result)
 }
-
 /// 应用重定向
 fn apply_redirections(command: &Command, context: &mut ExecutionContext) -> anyhow::Result<()> {
     for redirection in &command.redirections {
