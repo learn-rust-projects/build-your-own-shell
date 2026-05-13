@@ -111,6 +111,12 @@ impl JobList {
         self.sort_running_jobs();
         s
     }
+    pub fn print_jobs(&mut self) {
+        let s = GLOBAL_JOB.lock().unwrap().list_done_jobs();
+        if !s.is_empty() {
+            print!("{}", s);
+        }
+    }
     /// list_jobs 列出所有作业
     pub fn list_jobs(&mut self, is_done: bool) -> String {
         let mut s = String::new();

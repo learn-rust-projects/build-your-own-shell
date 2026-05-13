@@ -22,9 +22,8 @@ use rustyline::{
 
 use crate::{
     builtin_commands::JobList,
-    parse::{
-        CommandGroup, ExecutionContext, excuete_single_command, execute_pipeline, parse_command,
-    },
+    executor::pipe_handler::{excuete_single_command, execute_pipeline},
+    parse::{CommandGroup, ExecutionContext, parse_command},
 };
 
 pub static GLOBAL_VEC: LazyLock<Vec<PathBuf>> = LazyLock::new(|| {
@@ -86,33 +85,36 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn parse_and_handle_line(line: &str) -> anyhow::Result<()> {
-    let line_trim = line.trim();
+    // 1.去掉首尾空格 检查是否为空行
+    let line_trim = trim_and_check_line(line)?;
 
-    // 空行处理
-    if line_trim.is_empty() {
-        return Ok(());
-    }
-
-    // 词法分析
+    // 2.词法分析
     let raw_tokens = crate::lexer::tokenize_line(line_trim)?;
 
-    // 语法分析
+    // 3.语法分析
     let command_type = parse_command(&raw_tokens);
+
+    // 4.执行命令
+    execute_command_groups(command_type)?;
+
+    // 5.打印作业
+    GLOBAL_JOB.lock().unwrap().print_jobs();
+
+    Ok(())
+}
+fn trim_and_check_line(line: &str) -> anyhow::Result<&str> {
+    let line_trim = line.trim();
+    if line_trim.is_empty() {
+        return Err(anyhow::anyhow!("Empty line"));
+    }
+    Ok(line_trim)
+}
+
+// 将这个for循环抽取成函数，用于处理多个命令组的执行抽取到外面去
+fn execute_command_groups(command_groups: Vec<CommandGroup>) -> anyhow::Result<()> {
     // 创建执行上下文
     let mut context = ExecutionContext::new();
-
-    let execute_command = move |command_groups: &mut CommandGroup,
-                                context: &mut ExecutionContext|
-          -> anyhow::Result<()> {
-        if command_groups.commands.len() > 1 {
-            let _ = execute_pipeline(&command_groups.commands, context)?;
-        } else {
-            let _ = excuete_single_command(&command_groups.commands.remove(0), context)?;
-        };
-        Ok(())
-    };
-
-    for mut command_groups in command_type.into_iter() {
+    for mut command_groups in command_groups {
         // 将下面内容抽取成闭包
         if command_groups.background {
             context.background = true;
@@ -122,21 +124,16 @@ fn parse_and_handle_line(line: &str) -> anyhow::Result<()> {
             execute_command(&mut command_groups, &mut context)?;
         }
     }
-
-    let s = GLOBAL_JOB.lock().unwrap().list_done_jobs();
-    if !s.is_empty() {
-        print!("{}", s);
-    }
-    // // 执行命令
-    //
-    //     if command_groups.background {
-    //         continue;
-    //     }
-    //     thread::spawn(move || {
-    //         // 需要将下面这个if else 抽成闭包
-    //         i
-    //     });
-    // }
-
+    Ok(())
+}
+fn execute_command(
+    command_groups: &mut CommandGroup,
+    context: &mut ExecutionContext,
+) -> anyhow::Result<()> {
+    if command_groups.commands.len() > 1 {
+        let _ = execute_pipeline(&command_groups.commands, context)?;
+    } else {
+        let _ = excuete_single_command(&command_groups.commands.remove(0), context)?;
+    };
     Ok(())
 }
