@@ -22,9 +22,8 @@ use rustyline::{
 
 use crate::{
     builtin_commands::JobList,
-    parse::{
-        CommandGroup, ExecutionContext, excuete_single_command, execute_pipeline, parse_command,
-    },
+    executor::pipe_handler::{excuete_single_command, execute_pipeline},
+    parse::{CommandGroup, ExecutionContext, parse_command},
 };
 
 pub static GLOBAL_VEC: LazyLock<Vec<PathBuf>> = LazyLock::new(|| {
@@ -127,16 +126,5 @@ fn parse_and_handle_line(line: &str) -> anyhow::Result<()> {
     if !s.is_empty() {
         print!("{}", s);
     }
-    // // 执行命令
-    //
-    //     if command_groups.background {
-    //         continue;
-    //     }
-    //     thread::spawn(move || {
-    //         // 需要将下面这个if else 抽成闭包
-    //         i
-    //     });
-    // }
-
     Ok(())
 }
