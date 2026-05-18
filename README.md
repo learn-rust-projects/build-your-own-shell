@@ -157,6 +157,7 @@ $ history
 | [doc/parser-executor.md](doc/parser-executor.md) | 解析策略、管道执行、重定向系统、变量展开、策略模式 |
 | [doc/job-control.md](doc/job-control.md)         | 后台作业管理、JobList 设计、作业状态追踪           |
 | [doc/completion.md](doc/completion.md)           | Tab 补全、radix_trie、文件路径补全、自定义补全脚本 |
+| [doc/Tasks/](doc/Tasks/)                         | 开发任务列表与进度追踪                             |
 
 ## 许可证
 
